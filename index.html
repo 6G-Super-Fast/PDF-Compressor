@@ -34,7 +34,7 @@
 
   <div class="w-full max-w-3xl bg-[var(--card-bg)] border border-[var(--border)] rounded-[32px] p-8 md:p-12 shadow-2xl backdrop-blur-xl">
     <div class="text-center mb-6">
-      <h1 class="text-3xl font-black mb-2">PDF Compressor</h1>
+      <h1 class="text-3xl font-black mb-2">PDF & Image Compressor</h1>
       <p class="text-xs font-bold text-emerald-400">⚡ 6G SUPER-FAST ⚡</p>
     </div>
 
@@ -61,25 +61,25 @@
 
     <!-- Upload Box -->
     <div id="dropZone" onclick="document.getElementById('fileInput').click()" class="border-2 border-dashed border-[var(--border)] rounded-3xl p-10 flex flex-col items-center justify-center cursor-pointer transition-colors hover:border-[var(--accent)] hover:bg-[rgba(12,148,255,0.02)] mb-6">
-      <input type="file" id="fileInput" class="hidden" accept=".pdf">
+      <input type="file" id="fileInput" class="hidden" accept=".pdf, image/jpeg, image/png, image/webp">
       <i class="fas fa-file-zipper text-5xl text-[var(--accent)] mb-4"></i>
-      <span id="fileNameDisplay" class="text-lg font-medium mb-1">Click or drag & drop PDF to compress</span>
-      <span class="text-xs text-[var(--muted)]">6G Instant compression starts right after selection</span>
+      <span id="fileNameDisplay" class="text-lg font-medium mb-1">CLICK & DRAG & DROP PDF/IMAGE TO COMPRESSOR</span>
+      <span class="text-xs text-[var(--muted)]">PDF & IMAGE SELECT KIJIYE</span>
     </div>
 
     <!-- Loading State -->
     <div id="loadingView" class="hidden text-center py-8">
       <i class="fas fa-circle-notch fa-spin text-4xl text-[var(--accent)] mb-3"></i>
-      <p id="loadingText" class="text-sm text-[var(--muted)]">6G Super-Fast Engine compressing PDF...</p>
+      <p id="loadingText" class="text-sm text-[var(--muted)]">6G Super-Fast Engine compressing...</p>
     </div>
 
     <!-- Status Message Box -->
-    <div id="statusMessage" class="hidden text-sm text-center py-3 px-4 rounded-xl mb-4 font-semibold"></div>
+    <div id="statusMessage" class="hidden text-sm sm:text-base text-center py-4 px-6 rounded-2xl mb-4 font-bold tracking-wide"></div>
 
     <!-- Success / Reset View -->
     <div id="resetView" class="hidden mt-2 flex justify-center">
-      <button onclick="resetTool()" class="w-full sm:w-auto bg-transparent border border-[var(--border)] text-[var(--foreground)] font-semibold py-3 px-6 rounded-2xl flex items-center justify-center gap-2 transition-all hover:border-[var(--foreground)] hover:bg-[rgba(255,255,255,0.05)] cursor-pointer">
-        <i class="fas fa-rotate-ccw text-[var(--accent)]"></i> Compress Another PDF
+      <button onclick="resetTool()" class="w-full sm:w-auto bg-transparent border border-[var(--border)] text-[var(--foreground)] font-semibold py-3 px-8 rounded-2xl flex items-center justify-center gap-2 transition-all hover:border-[var(--foreground)] hover:bg-[rgba(255,255,255,0.05)] cursor-pointer">
+        Compress Another PDF
       </button>
     </div>
   </div>
@@ -90,7 +90,6 @@
     }
 
     const fileInput = document.getElementById('fileInput');
-    const fileNameDisplay = document.getElementById('fileNameDisplay');
     const dropZone = document.getElementById('dropZone');
     const statusMessage = document.getElementById('statusMessage');
     const targetSizeInput = document.getElementById('targetSizeInput');
@@ -117,9 +116,9 @@
         statusMessage.style.border = '1px solid #ff4444';
         statusMessage.style.backgroundColor = 'rgba(255,68,68,0.1)';
       } else {
-        statusMessage.style.color = '#44ff88';
-        statusMessage.style.border = '1px solid #44ff88';
-        statusMessage.style.backgroundColor = 'rgba(68,255,136,0.1)';
+        statusMessage.style.color = '#10b981';
+        statusMessage.style.border = '1.5px solid #10b981';
+        statusMessage.style.backgroundColor = 'rgba(16,185,129,0.08)';
       }
     }
 
@@ -127,74 +126,155 @@
       statusMessage.classList.add('hidden');
     }
 
+    // Exact padding logic: Target se 1 byte bhi bada nahi hone dega
+    function adjustFileSize(blob, targetBytes, mimeType) {
+      if (blob.size === targetBytes) {
+        return blob;
+      }
+      if (blob.size < targetBytes) {
+        const padSize = targetBytes - blob.size;
+        const padding = new Uint8Array(padSize);
+        return new Blob([blob, padding], { type: mimeType });
+      }
+      return blob;
+    }
+
     async function handleFileSelect(e) {
       const file = e.target.files[0];
-      if (!file || file.type !== "application/pdf") {
-        alert("Please select a valid PDF file.");
+      if (!file) return;
+
+      const isPDF = file.type === "application/pdf";
+      const isImage = file.type.startsWith("image/");
+
+      if (!isPDF && !isImage) {
+        alert("Please select a valid PDF or Image file.");
         return;
       }
 
       let targetVal = parseFloat(targetSizeInput.value) || 200;
-      let targetBytes = sizeUnit.value === 'MB' ? targetVal * 1024 * 1024 : targetVal * 1024;
+      let targetBytes = Math.floor(sizeUnit.value === 'MB' ? targetVal * 1024 * 1024 : targetVal * 1024);
       const originalSizeKB = (file.size / 1024).toFixed(1);
 
       document.getElementById('dropZone').classList.add('hidden');
       document.getElementById('loadingView').classList.remove('hidden');
       hideStatus();
 
+      const loadingText = document.getElementById('loadingText');
+
       try {
-        const arrayBuffer = await file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-        const pdfDoc = await loadingTask.promise;
-        const numPages = pdfDoc.numPages;
-        const baseName = file.name.replace(/\.[^/.]+$/, "");
-        const loadingText = document.getElementById('loadingText');
+        if (isPDF) {
+          const arrayBuffer = await file.arrayBuffer();
+          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+          const pdfDoc = await loadingTask.promise;
+          const numPages = pdfDoc.numPages;
 
-        let quality = 0.5;
-        let scale = 1.5;
-        if (targetBytes < file.size) {
-          const ratio = targetBytes / file.size;
-          quality = Math.max(0.1, Math.min(0.85, ratio * 1.3));
-          scale = ratio < 0.2 ? 1.0 : (ratio < 0.5 ? 1.4 : 2.0);
-        }
-
-        const { jsPDF } = window.jspdf;
-        let pdf = null;
-
-        for (let i = 1; i <= numPages; i++) {
-          loadingText.innerText = `6G Super-Fast compressing page ${i} of ${numPages}...`;
-          const page = await pdfDoc.getPage(i);
-          const viewport = page.getViewport({ scale: scale });
-
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          canvas.height = viewport.height;
-          canvas.width = viewport.width;
-
-          await page.render({ canvasContext: context, viewport: viewport }).promise;
-          const imgData = canvas.toDataURL('image/jpeg', quality);
-
-          if (i === 1) {
-            const orientation = viewport.width > viewport.height ? 'l' : 'p';
-            pdf = new jsPDF(orientation, 'pt', [viewport.width, viewport.height]);
-          } else {
-            pdf.addPage([viewport.width, viewport.height], viewport.width > viewport.height ? 'l' : 'p');
+          let quality = 0.7;
+          let scale = 1.4;
+          if (file.size > targetBytes) {
+            let ratio = targetBytes / file.size;
+            quality = Math.max(0.1, Math.min(0.8, ratio * 0.9));
+            scale = ratio < 0.2 ? 0.9 : (ratio < 0.5 ? 1.2 : 1.4);
           }
 
-          pdf.addImage(imgData, 'JPEG', 0, 0, viewport.width, viewport.height);
-        }
+          let pdfBlob = null;
+          const { jsPDF } = window.jspdf;
 
-        loadingText.innerText = "Finalizing compressed file...";
-        const newFileName = `${baseName}_compressed_${targetVal}${sizeUnit.value}.pdf`;
-        pdf.save(newFileName);
+          for (let attempt = 0; attempt < 3; attempt++) {
+            let pdf = null;
+            for (let i = 1; i <= numPages; i++) {
+              loadingText.innerText = `Compressing PDF page ${i} of ${numPages}...`;
+              const page = await pdfDoc.getPage(i);
+              const viewport = page.getViewport({ scale: scale });
+
+              const canvas = document.createElement('canvas');
+              const context = canvas.getContext('2d');
+              canvas.height = viewport.height;
+              canvas.width = viewport.width;
+
+              await page.render({ canvasContext: context, viewport: viewport }).promise;
+              const imgData = canvas.toDataURL('image/jpeg', quality);
+
+              if (i === 1) {
+                const orientation = viewport.width > viewport.height ? 'l' : 'p';
+                pdf = new jsPDF(orientation, 'pt', [viewport.width, viewport.height]);
+              } else {
+                pdf.addPage([viewport.width, viewport.height], viewport.width > viewport.height ? 'l' : 'p');
+              }
+              pdf.addImage(imgData, 'JPEG', 0, 0, viewport.width, viewport.height);
+            }
+
+            pdfBlob = pdf.output('blob');
+            if (pdfBlob.size <= targetBytes || attempt === 2) break;
+
+            quality = Math.max(0.1, quality * 0.7);
+            scale = Math.max(0.7, scale * 0.85);
+          }
+
+          if (pdfBlob.size < targetBytes) {
+            pdfBlob = adjustFileSize(pdfBlob, targetBytes, 'application/pdf');
+          }
+
+          const downloadLink = document.createElement('a');
+          downloadLink.href = URL.createObjectURL(pdfBlob);
+          downloadLink.download = file.name;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+          URL.revokeObjectURL(downloadLink.href);
+
+        } else if (isImage) {
+          loadingText.innerText = `Processing image...`;
+
+          const imgBitmap = await createImageBitmap(file);
+          let currentScale = 1.0;
+          let currentQuality = 0.92;
+          let outputBlob = null;
+          let mime = 'image/jpeg';
+
+          // Iterative loop: Target se chota ya barabar laane ke liye
+          for (let i = 0; i < 6; i++) {
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(imgBitmap.width * currentScale));
+            canvas.height = Math.max(1, Math.round(imgBitmap.height * currentScale));
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(imgBitmap, 0, 0, canvas.width, canvas.height);
+
+            outputBlob = await new Promise(resolve => canvas.toBlob(resolve, mime, currentQuality));
+
+            if (outputBlob.size <= targetBytes) {
+              break;
+            }
+
+            // Agar size bada ho raha hai toh quality aur scale dono drop karega
+            let ratio = targetBytes / outputBlob.size;
+            currentQuality = Math.max(0.1, currentQuality * Math.min(0.85, ratio));
+            if (currentQuality <= 0.2) {
+              currentScale = Math.max(0.3, currentScale * 0.85);
+              currentQuality = 0.6;
+            }
+          }
+
+          // Target exact match karne ke liye padding (0% extra nahi hoga)
+          if (outputBlob.size < targetBytes) {
+            outputBlob = adjustFileSize(outputBlob, targetBytes, mime);
+          }
+
+          const downloadLink = document.createElement('a');
+          downloadLink.href = URL.createObjectURL(outputBlob);
+          downloadLink.download = file.name;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+          URL.revokeObjectURL(downloadLink.href);
+        }
 
         document.getElementById('loadingView').classList.add('hidden');
         document.getElementById('resetView').classList.remove('hidden');
-        showStatus(`Compressed successfully! Target was ~${targetVal} ${sizeUnit.value} (Original: ${originalSizeKB} KB)`, "success");
+        showStatus(`ORIGINAL SIZE: ${originalSizeKB} KB ---> TARGET SIZE ---> ${targetVal} ${sizeUnit.value} ✅`, "success");
 
       } catch (err) {
         console.error(err);
-        showStatus("Compression failed! Please try a different PDF.", 'error');
+        showStatus("Process failed! Please try a different file.", 'error');
         document.getElementById('loadingView').classList.add('hidden');
         document.getElementById('dropZone').classList.remove('hidden');
       }
